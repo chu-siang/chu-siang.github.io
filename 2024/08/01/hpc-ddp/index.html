@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <meta name="theme-color" content="#3367D6"/>
+  <link rel="apple-touch-icon" href="/icons-192.png">
+  <link rel="manifest" href="/manifest.json">
+  
+  <meta name="generator" content="Hexo 7.0.0">
+
+  
+
+  
+
+  
+    <meta name="author" content="Johnson Tseng">
+  
+
+  
+
+  
+
+  <title>hpc_ddp | Atseng&#39;s Blog</title>
+
+  
+
+  
+    <link rel="shortcut icon" href="https://raw.githubusercontent.com/chu-siang/chu-siang.github.io/master/favicon.ico">
+  
+
+  <!--mathjax latex数学公式显示支持-->
+  
+  
+
+  
+
+  
+
+  
+<link rel="stylesheet" href="/css/style.css">
+
+</head>
+<body>
+  <div class="root-container">
+    
+<!-- header container -->
+<header class="header-container post">
+  
+    <div class="post-image" style="background-image: url(https://images7.alphacoders.com/135/1350954.png)"></div>
+  
+
+  <!-- navbar -->
+<nav class="navbar">
+  <div class="navbar-content">
+    <!-- logo -->
+    <div class="navbar-logo">
+      <a href="/">
+        
+          Atseng&#39;s Blog
+        
+      </a>
+    </div>
+    <!-- link -->
+    <div class="navbar-link">
+      <div class="navbar-btn">
+        <div></div>
+        <div></div>
+        <div></div>
+      </div>
+      <ul class="navbar-list">
+        
+          <li class="navbar-list-item"><a href="/">首頁</a></li>
+        
+          <li class="navbar-list-item"><a href="/about">關於</a></li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+  
+  
+
+  
+  
+
+  
+  
+
+  
+  
+
+  
+  
+    <div class="header-content">
+      <div class="post-text layout-block">
+        <div class="layout-margin">
+          <h1 class="title-wrap">hpc_ddp</h1>
+          <h2 class="title-sub-wrap">
+            <strong>Johnson Tseng</strong>
+            <span>發布於</span>
+            <time  class="article-date" datetime="2024-08-01T02:21:34.000Z" itemprop="datePublished">2024-08-01</time>
+          </h2>
+          
+          
+          <ul class="wrap-list dark">
+  
+</ul>
+          <ul class="wrap-list dark">
+  
+</ul>
+        </div>
+      </div>
+    </div>
+  
+
+  
+  
+  
+</header>
+
+    <!-- 文章 -->
+
+<!-- 文章内容 -->
+<div class="body-container">
+  <article class="content-container layout-block post-container">
+    <div class="article-info">
+      
+      
+      
+      
+      <section class="article-entry markdown-body layout-margin content-padding--large soft-size--large soft-style--box">
+        <h1 id="DDP-Distributed-Data-Parallel-1"><a href="#DDP-Distributed-Data-Parallel-1" class="headerlink" title="DDP (Distributed Data Parallel) (1)"></a>DDP (Distributed Data Parallel) (1)</h1><ul>
+<li>分散式的基礎概念<ul>
+<li>分散式訓練就是指<strong>將模型放置在很多台機器且每台機器有多個 GPU 上進行訓練</strong>，使用分散式訓練的原因有兩種：<ul>
+<li>1.模型在一塊 GPU 上放不下.</li>
+<li>2.使用多塊 GPU 進行平行計算能夠加速訓練。但需要注意的是隨著使用的 GPU 數量增加，各個設備之間的通訊會越複雜，導致訓練速度下降。</li>
+</ul>
+</li>
+<li>分散式訓練主要分為兩種類型：資料平行化 (Data Parallel)、模型平行化 (Model Parallel)。</li>
+</ul>
+</li>
+<li><strong>資料平行化 (Data Parallel)</strong><ul>
+<li>當Data非常大 &amp;&amp; Model 可以放在單個GPU 上的時候 可以用Data Parallel</li>
+<li>實作方式 :<ul>
+<li><p>照一些規則將數據分配到不同的 GPU 上，並且每個 GPU 都有相同的模型架構，也就是會在每個 GPU 上複製一份相同的模型，各自進行訓練後，將計算結果合併，再進行參數更新。</p>
+<ul>
+<li><ol>
+<li>CPU將不同的訓練數據（mini-batch）分別餵給GPU0和GPU1設備；</li>
+</ol>
+</li>
+<li><ol start="2">
+<li>不同的顯卡設備上儲存了完全一致的模型，透過mini-batch數據進行了前向和反向傳播；</li>
+</ol>
+</li>
+<li><ol start="3">
+<li>位於不同GPU設備上的模型進行權重同步和更新</li>
+</ol>
+</li>
+</ul>
+</li>
+<li><p>參數更新方式 有 同步 及 異步</p>
+<ul>
+<li>同步 (synchronous):<ul>
+<li>所有的 GPU 在訓練時會等待其他 GPU 計算完畢後，才會進行一次參數更新</li>
+<li>速度比 異步(非同步) 慢</li>
+<li>因為在更新參數時會合併其他計算結果，相當於增加了 batch size 的大小，對於訓練結果有一定的提升</li>
+</ul>
+</li>
+<li>非同步、異步 (asynchronous):<ul>
+<li>每個 GPU 各自進行訓練和參數更新，不須等待其他 GPU 計算完畢。</li>
+<li>能夠提升訓練速度，但可能會產生 Slow and Stale Gradients (梯度失效、梯度過期) 問題</li>
+<li>收斂過程較不穩定，訓練結果會比使用同步的方式差。</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>模型平行化 (Model Parallel)</strong><ul>
+<li><p>當模型架構太大以至於在一個 GPU 放不下時，可以採用模型平行化的方式來將模型拆解並分配到不同的 GPU 上。</p>
+</li>
+<li><p>由於模型層與層之間通常有依賴性，也就是指在進行前向傳播、反向傳播(back propagation)時，前面及後面的層會作為彼此的輸入和輸出，在訓練速度上會有一定的限制，若非使用較大的模型較不建議採用模型平行化。</p>
+</li>
+<li><p>實作方式:</p>
+<ul>
+<li><ol>
+<li>將 mini-batch 餵給 GPU0；</li>
+</ol>
+</li>
+<li><ol start="2">
+<li>在 GPU0 上進行數據的正向傳播；</li>
+</ol>
+</li>
+<li><ol start="3">
+<li>將上一步的數據繼續餵給 GPU1，並在 GPU1 上繼續進行正向傳播；</li>
+</ol>
+</li>
+<li><ol start="4">
+<li>GPU1 進行反向傳播；</li>
+</ol>
+</li>
+<li><ol start="5">
+<li>反向數據回傳給 GPU0，繼續進行反向； 在模型並行時，並不需要對各個設備上模型的權重參數進行同步更新，而是會有中間數據在各個 GPU 上的模型之間流動。</li>
+</ol>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>分散式訓練系統架構</strong><ul>
+<li>分散式訓練之所以能達到這兩件事是藉由系統架構的設計來實現，目前的系統架構主要分成 Parameter Server (PS)、Ring-All-Reduce</li>
+<li>Parameter Server (PS)<ul>
+<li><p>Parameter Server 架構分為 sever group 和多個 worker group 兩大部分以及 resource manager，其中 resource manager 負責整體的資源分配</p>
+</li>
+<li><p>Server group</p>
+<ul>
+<li>sever group 用於初始化及維護所有的模型參數，由 sever manager 和多個 sever node (master node) 組成，其中 sever manager 負責分配資源並維護各個 sever node 的狀態；sever node 則是負責維護被分配的一部分參數。</li>
+</ul>
+</li>
+<li><p>Worker group</p>
+<ul>
+<li>worker group 用於維護從 training data 分配到的數據及對應的 sever node 所分配到的部分參數</li>
+<li>每個 worker group 由 task scheduler 和多個 worker node 組成</li>
+<li>task scheduler 負責分配各個 worker node 的任務並進行監控</li>
+<li>worker node 則是負責進行訓練和更新各自分配到的參數<ul>
+<li>worker node 只與對應的 sever node 進行通訊，不論是 worker group 和 worker group、worker group 內部的每個 worker node 之間都不會互相交流。</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>每個 worker group 會各自進行訓練、計算梯度、更新分配到的部分參數，再將結果傳送給 server node。接著 server node 把收到的參數彙總並進行全局更新 (ex: 平均參數)，再傳回給 worker node</p>
+</li>
+<li><p>由於 server node 需要跟所有對應的 worker node 進行溝通，容易導致 sever node 的計算過重以及網路阻塞的狀況，從而使得訓練速度下降。</p>
+</li>
+</ul>
+</li>
+<li><strong>Ring-All-Reduce</strong><ul>
+<li>Ring-All-Reduce 架構是將所有 GPU (假設為 N 個) 的通訊方式呈現環狀的形式，並且每個 GPU 中的數據會分為 N 份</li>
+<li>GPU 之間會根據環狀的方式來傳送數據。這樣的架構所產生的通訊量與設備的多寡無關，因此能夠大幅地減少通訊的開銷、更好地平衡設備間通訊的使用程度</li>
+<li>在訓練過程中，可以利用 Backpropagation 的特性 (後面層的梯度會先於前面層計算)，在計算前面層梯度的同時，進行後面層梯度的傳送，以提升訓練效率。</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="Pytorch"><a href="#Pytorch" class="headerlink" title="Pytorch"></a>Pytorch</h2><ul>
+<li><p>Pytorch 提供了兩種分散式訓練方法 — </p>
+<ul>
+<li>DP 採用 Parameter Server (PS) 架構，並且僅支援單台機器多 GPU，任務中只會有一個進程</li>
+<li>DDP 則是採用 Ring-All-Reduce 架構，可支援多台機器多 GPU，能夠使用多進程。</li>
+</ul>
+</li>
+<li><p>group: 指process group，默認為一組。</p>
+</li>
+<li><p>backend: 指process使用的通訊後端，Pytorch 支援 mpi、gloo、nccl，若是使用 Nvidia GPU 推薦使用 nccl。</p>
+</li>
+<li><p>world_size : 指process group中的process數量</p>
+<ul>
+<li><em>若使用單台機器多 GPU ，world_size 表示使用的 GPU 數量</em></li>
+<li><em>若使用多台機器多 GPU ，world_size 表示使用的機器數量</em></li>
+</ul>
+</li>
+<li><p>初始化DDP</p>
+<ul>
+<li><p>設置進程通訊的後端為 nccl</p>
+  <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">dist.init_process_group(backend=<span class="string">&#x27;nccl&#x27;</span>)</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>同步所有process</p>
+  <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">dist.barrier()</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>獲取當前process group 內的 所有process數</p>
+  <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">world_size = dist.get_world_size()</span><br></pre></td></tr></table></figure></li>
+</ul>
+</li>
+<li><p>Data Parallel</p>
+<ul>
+<li><p>將數據集劃分給每一個process，避免process間的數據重複</p>
+  <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">train_sampler = DistributedSampler(train_dataset)</span><br><span class="line">valid_sampler = DistributedSampler(valid_dataset)</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>DistributedSampler 分配方式</p>
+<ul>
+<li><p>假設使用 2 個 GPU 且數據集分為 0~4 份，首先將數據集進行 shuffle 後分為兩份，不足的部分由第一份數據補 (第 5 份)，最後再以間隔方式分配數據至不同的 GPU 中。</p>
+</li>
+<li><p>接著再將 sampler 傳入 DataLoader</p>
+</li>
+</ul>
+  <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">train_loader = DataLoader(train_dataset, sampler=train_sampler, batch_size=<span class="number">256</span>, pin_memory=<span class="literal">False</span>, prefetch_factor=<span class="number">2</span>, num_workers=<span class="number">4</span>)</span><br><span class="line">valid_loader = DataLoader(valid_dataset, sampler=valid_sampler, batch_size=<span class="number">256</span>, pin_memory=<span class="literal">False</span>, prefetch_factor=<span class="number">2</span>, num_workers=<span class="number">4</span>)</span><br></pre></td></tr></table></figure></li>
+</ul>
+</li>
+<li><p>Model</p>
+<ul>
+<li><p>假設模型已經 load，直接使用 <code>.to(device)</code>，將模型分配至 CUDA</p>
+  <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">device = torch.device(<span class="string">&quot;cuda&quot;</span>, args.local_rank)</span><br><span class="line">model = model.to(device)</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>使用 SyncBN 優化各自進程中數據集的 BN 計算</p>
+<p>  <a target="_blank" rel="noopener" href="https://medium.com/ai%E5%8F%8D%E6%96%97%E5%9F%8E/learning-model-batch-normalization%E4%BB%8B%E7%B4%B9-%E8%BD%89%E9%8C%84-de7a2e466e3">Learning Model : Batch normalization介紹[轉錄]</a></p>
+<p>  <a target="_blank" rel="noopener" href="https://cloud.tencent.com/developer/article/2126838">一文理解 PyTorch 中的 SyncBatchNorm-腾讯云开发者社区-腾讯云</a></p>
+  <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>使用 DistributedDataParallel 將模型包裝起來</p>
+  <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><strong>set_epoch</strong></p>
+<ul>
+<li>在每一次迭代前，通過 set_epoch 來設置一個 random seed，這樣每次運行才會將每個 epoch 的數據都 shuffle，並且讓每個 GPU 拿到的數據不同。 [<a target="_blank" rel="noopener" href="https://cloud.baidu.com/article/3252896">epoch</a>]</li>
+</ul>
+  <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">train_sampler.set_epoch(epoch)</span><br><span class="line">valid_sampler.set_epoch(epoch)</span><br></pre></td></tr></table></figure></li>
+</ul>
+</li>
+<li><p><strong>啟動分散式訓練</strong></p>
+<ul>
+<li><p><strong>1.  torch.distributed.launch</strong></p>
+<ul>
+<li><p><strong>Parameter</strong></p>
+<p>  nproc_per_node:  每台機器有多少進程</p>
+<p>  nnodes:   總共使用多少台機器</p>
+<p>  node_rank:   當前process位於哪台機器</p>
+<p>  master_addr: master process 的網路地址</p>
+<p>  master_port: master process 的端口，要先確認該端口是否被其他process佔用</p>
+<p>  官方document: <a target="_blank" rel="noopener" href="https://pytorch.org/docs/stable/distributed.html#launch-utility">https://pytorch.org/docs/stable/distributed.html#launch-utility</a></p>
+</li>
+<li><p><strong>運行一台機器多 GPU</strong></p>
+<ul>
+<li>CUDA_VISIBLE_DEVICES 參數為選擇要使用哪一台 GPU</li>
+<li>0,1 表示使用第 0、1 序號的 GPU</li>
+<li>[]<a target="_blank" rel="noopener" href="https://blog.csdn.net/zqx951102/article/details/127946871">註(GPU 更改)</a></li>
+</ul>
+  <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ CUDA_VISIBLE_DEVICES=<span class="number">0</span>,<span class="number">1</span> python -m torch.distributed.launch --nproc_per_node=<span class="number">2</span> ddp_example.py</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>運行多台機器多 GPU</p>
+<ul>
+<li>假設 IP 為 192.168.1.1、free port 為 1234</li>
+</ul>
+  <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 第一台機器</span></span><br><span class="line">$ CUDA_VISIBLE_DEVICES=<span class="number">0</span>,<span class="number">1</span> python -m torch.distributed.launch --nproc_per_node=<span class="number">2</span> --nnodes=<span class="number">2</span> --node_rank=<span class="number">0</span> --master_addr=”<span class="number">192.168</span><span class="number">.1</span><span class="number">.1</span><span class="string">&quot; --master_port=1234 ddp_example.py</span></span><br><span class="line"><span class="string"># 第二台機器</span></span><br><span class="line"><span class="string">$ CUDA_VISIBLE_DEVICES=0,1 python -m torch.distributed.launch --nproc_per_node=2 --nnodes=2 --node_rank=1 --master_addr=”192.168.1.1&quot;</span> --master_port=<span class="number">1234</span> ddp_example.py</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>運行一台機器多 GPU，但執行兩個不同實驗</p>
+  <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ CUDA_VISIBLE_DEVICES=<span class="number">0</span>,<span class="number">1</span> python -m torch.distributed.launch --nproc_per_node=<span class="number">2</span> ddp_example.py <span class="comment"># 使用不同 master_port 避免衝突</span></span><br><span class="line">$ CUDA_VISIBLE_DEVICES=<span class="number">2</span>,<span class="number">3</span> python -m torch.distributed.launch --nproc_per_node=<span class="number">2</span> --master_port <span class="number">9999</span> ddp_example.py</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>運行一台機器多 GPU，但執行兩個不同實驗</p>
+  <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ CUDA_VISIBLE_DEVICES=<span class="number">0</span>,<span class="number">1</span> python -m torch.distributed.launch --nproc_per_node=<span class="number">2</span> ddp_example.py</span><br><span class="line"><span class="comment"># 使用不同 master_port 避免衝突</span></span><br><span class="line">$ CUDA_VISIBLE_DEVICES=<span class="number">2</span>,<span class="number">3</span> python -m torch.distributed.launch --nproc_per_node=<span class="number">2</span> --master_port <span class="number">9999</span> ddp_example.py</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><strong><code>torch.distributed.launch</code> instruction 介绍</strong></p>
+<p>  <a target="_blank" rel="noopener" href="https://blog.csdn.net/magic_ll/article/details/122359490">https://blog.csdn.net/magic_ll/article/details/122359490</a></p>
+</li>
+</ul>
+</li>
+<li><p><strong>2.  torchrun</strong></p>
+<ul>
+<li><p>Pytorch 提供了新的指令替代 torch.distributed.launch，參數的使用方式可參考官方文件: <a target="_blank" rel="noopener" href="https://pytorch.org/docs/stable/elastic/run.html#launcher-api">https://pytorch.org/docs/stable/elastic/run.html#launcher-api</a></p>
+</li>
+<li><p>運行一台機器多 GPU</p>
+  <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ CUDA_VISIBLE_DEVICES=<span class="number">0</span>,<span class="number">1</span> torchrun --standalone --nnodes=<span class="number">1</span> --nproc_per_node=<span class="number">2</span> ddp_example.py</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>運行多台機器多 GPU</p>
+<ul>
+<li>參數 nnodes 為使用機器序號的區間、rdzv_id 為唯一的 job id、rdzv_endpoint 為 backend 所執行的 endpoint，格式為 <code>&lt;host&gt;:&lt;port&gt;</code> ，替代原本的 master_addr 及 master_port。</li>
+</ul>
+  <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ torchrun --nnodes=<span class="number">1</span>:<span class="number">4</span> --nproc_per_node=$NUM_TRAINERS --rdzv_id=$JOB_ID --rdzv_backend=c10d --rdzv_endpoint=$HOST_NODE_ADDR ddp_example.py</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>執行指令 開始train</p>
+  <figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ CUDA_VISIBLE_DEVICES=<span class="number">0</span>,<span class="number">1</span> python -m torch.distributed.launch --nproc_per_node=<span class="number">2</span> ddp_example.py</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>Ref code</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://github.com/chingi071/Pytorch_note/blob/master/ddp_example.py">https://github.com/chingi071/Pytorch_note/blob/master/ddp_example.py</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>Pytorch 分散式訓練的基本流程:</p>
+<ul>
+<li>設置 local_rank 參數並使用 init_process_group 進行初始化</li>
+<li>使用 DistributedSampler 劃分數據集</li>
+<li>將模型分配至 CUDA 並設置 SyncBN 及 DistributedDataParallel</li>
+<li>將 train、vaild Sampler 設置 set_epoch</li>
+<li>在 sever 上執行指令開始訓練</li>
+</ul>
+</li>
+</ul>
+<p>ref  :</p>
+<p><a target="_blank" rel="noopener" href="https://medium.com/ching-i/pytorch-%E5%88%86%E6%95%A3%E5%BC%8F%E8%A8%93%E7%B7%B4-distributeddataparallel-%E6%A6%82%E5%BF%B5%E7%AF%87-8378e0ead77">https://medium.com/ching-i/pytorch-分散式訓練-distributeddataparallel-概念篇-8378e0ead77</a></p>
+<p><a target="_blank" rel="noopener" href="https://blog.csdn.net/taoqick/article/details/126449935">https://blog.csdn.net/taoqick/article/details/126449935</a></p>
+<p><a target="_blank" rel="noopener" href="https://www.cnblogs.com/rossiXYZ/p/15546837.html">https://www.cnblogs.com/rossiXYZ/p/15546837.html</a></p>
+<p><a target="_blank" rel="noopener" href="https://tech.preferred.jp/en/blog/technologies-behind-distributed-deep-learning-allreduce/">https://tech.preferred.jp/en/blog/technologies-behind-distributed-deep-learning-allreduce/</a></p>
+<p><a target="_blank" rel="noopener" href="https://medium.com/ai%E5%8F%8D%E6%96%97%E5%9F%8E/learning-model-batch-normalization%E4%BB%8B%E7%B4%B9-%E8%BD%89%E9%8C%84-de7a2e466e3">https://medium.com/ai反斗城/learning-model-batch-normalization介紹-轉錄-de7a2e466e3</a></p>
+<p><a target="_blank" rel="noopener" href="https://cloud.tencent.com/developer/article/2126838">https://cloud.tencent.com/developer/article/2126838</a></p>
+<p><a target="_blank" rel="noopener" href="https://cloud.baidu.com/article/3252896">https://cloud.baidu.com/article/3252896</a></p>
+<p><a target="_blank" rel="noopener" href="https://pytorch.org/docs/stable/distributed.html#launch-utility">https://pytorch.org/docs/stable/distributed.html#launch-utility</a></p>
+<p><a target="_blank" rel="noopener" href="https://blog.csdn.net/magic_ll/article/details/122359490">https://blog.csdn.net/magic_ll/article/details/122359490</a></p>
+
+      </section>
+
+      
+      
+        <nav class="article-nav">
+          
+          
+            <div class="article-nav-item layout-padding">
+  <article class="card-container article-nav-card content-padding--primary soft-size--large soft-style--box">
+    
+      <div class="card-cover" background-image-lazy data-img="https://images.alphacoders.com/114/thumb-1920-1140073.jpg"></div>
+    
+    <div class="card-text">
+      
+        <a href="/2024/07/14/skillmap/skillroadmap/" itemprop="url">
+          <h2 class="card-text--title text-ellipsis">Skill Road Map</h2>
+        </a>
+      
+      <div class="card-text--row">Older</div>
+    </div>
+  </article>
+</div>
+          
+        </nav>
+      
+
+      <section class="page-message-container layout-padding">
+        
+
+
+  
+  
+
+  
+  
+
+
+      </section>
+    </div>
+    <div class="widget-info">
+      <section class="widget-author widget-item layout-margin content-padding--primary soft-size--large soft-style--box">
+  <div class="widget-body">
+    
+      <img src="https://i.pinimg.com/564x/88/15/8e/88158e68fd84006c0bddc74951706944.jpg" class="soft-size--round soft-style--box" alt="Atseng">
+    
+    
+      <h2>Atseng</h2>
+    
+    
+      <p>No pain no gain.</p>
+    
+
+    <div class="count-box">
+      <div class="count-box--item">
+        <svg class="icon icon-article" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <path d="M240.51564747 647.74217627h196.07203239c16.59071043 0 30.16492806-13.57421762 30.16492805-30.16492806V165.10332731c0-33.18142087-30.16492806-60.32985613-60.32985612-60.32985611H245.04038668C225.43318342 104.7734712 210.35071939 119.85593522 210.35071939 139.46313845V617.57724821c0 16.59071043 13.57421762 30.16492806 30.16492808 30.16492806z m663.62841731-452.47392089v482.63884894c0 33.18142087-27.14843525 60.32985613-60.32985612 60.32985613H180.18579134c-33.18142087 0-60.32985613-27.14843525-60.32985612-60.32985613V195.26825538c-49.77213131 0-90.49478418 40.72265287-90.49478417 90.49478417v452.4739209c0 49.77213131 40.72265287 90.49478418 90.49478417 90.49478417h286.56681657c16.59071043 0 30.16492806 13.57421762 30.16492807 30.16492807s13.57421762 30.16492806 30.16492805 30.16492806h90.49478418c16.59071043 0 30.16492806-13.57421762 30.16492805-30.16492806s13.57421762-30.16492806 30.16492807-30.16492807h286.56681657c49.77213131 0 90.49478418-40.72265287 90.49478417-90.49478417V285.76303955c0-49.77213131-40.72265287-90.49478418-90.49478417-90.49478417zM587.41232014 647.74217627h191.54729318c19.60720323 0 34.68966726-15.08246403 34.68966729-34.68966727V134.93839925c0-16.59071043-13.57421762-30.16492806-30.16492808-30.16492805H617.57724821c-30.16492806 0-60.32985613 27.14843525-60.32985612 60.32985611v452.4739209c0 16.59071043 13.57421762 30.16492806 30.16492805 30.16492806z" fill="currentColor"></path>
+</svg>
+        <span>10</span>
+      </div>
+      <div class="count-box--item">
+        <svg class="icon icon-categories" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <path d="M900.3614811 257.09082106h-339.81629553l-67.96326003-101.9448889c-19.41807444-29.12711113-48.54518557-43.69066667-82.52681443-43.69066667H123.6385189c-53.39970333 0-97.09036999 43.69066667-97.09037113 97.09036999v582.54222222c0 53.39970333 43.69066667 97.09036999 97.09037113 97.09037002h776.7229622c53.39970333 0 97.09036999-43.69066667 97.09037113-97.09037002V354.18119104c0-53.39970333-43.69066667-97.09036999-97.09037113-97.09036998z m-97.09036999 242.72592554H220.72888889c-24.27259221 0-48.54518557-24.27259221-48.54518556-48.54518556s24.27259221-48.54518557 48.54518556-48.54518444h582.54222222c24.27259221 0 48.54518557 24.27259221 48.54518556 48.54518444s-24.27259221 48.54518557-48.54518556 48.54518556z" fill="currentColor"></path>
+</svg>
+        0
+      </div>
+      <div class="count-box--item">
+        <svg class="icon icon-tags" viewBox="0 0 1098 1024" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <path d="M283.42180005 272q0-28.38857157-20.09142843-48.48000001t-48.47999998-20.09142842-48.48000002 20.09142842-20.09142846 48.48000001 20.09142846 48.48 48.48000002 20.09142843 48.47999998-20.09142843 20.09142843-48.48zM855.0332285 580.57142843q0 28.38857157-19.81714313 48.2057147l-263.03999997 263.58857157q-20.9142853 19.81714313-48.75428534 19.81714312-28.38857157 0-48.20571468-19.81714312l-383.04-383.58857157q-20.36571468-19.81714313-34.55999999-54.10285688t-14.19428534-62.6742853l0-222.85714313q0-27.84000002 20.36571469-48.20571469t48.2057147-20.36571466l222.85714313 0q28.38857157 0 62.6742853 14.19428529t54.65142842 34.55999999l383.04000001 382.49142843q19.81714313 20.9142853 19.81714314 48.75428532zM1060.74751475 580.57142843q0 28.38857157-19.81714313 48.2057147l-263.04 263.58857157q-20.9142853 19.81714313-48.75428531 19.81714312-19.26857155 0-31.61142843-7.47428531t-28.38857159-24.13714314l251.79428534-251.7942853q19.81714313-19.81714313 19.81714308-48.20571469 0-27.84000002-19.81714308-48.75428531l-383.04000001-382.49142845q-20.36571468-20.36571468-54.65142842-34.55999999t-62.67428532-14.19428534l120 0q28.38857157 0 62.67428532 14.19428534t54.65142842 34.55999999l383.03999998 382.49142845q19.81714313 20.9142853 19.81714314 48.75428531z" fill="currentColor"></path>
+</svg>
+        6
+      </div>
+    </div>
+  </div>
+</section>
+
+      
+
+      
+
+      <section class="widget-categorys widget-item layout-margin content-padding--primary soft-size--large soft-style--box">
+  <div class="widget-title">
+    <svg class="icon icon-categories" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <path d="M900.3614811 257.09082106h-339.81629553l-67.96326003-101.9448889c-19.41807444-29.12711113-48.54518557-43.69066667-82.52681443-43.69066667H123.6385189c-53.39970333 0-97.09036999 43.69066667-97.09037113 97.09036999v582.54222222c0 53.39970333 43.69066667 97.09036999 97.09037113 97.09037002h776.7229622c53.39970333 0 97.09036999-43.69066667 97.09037113-97.09037002V354.18119104c0-53.39970333-43.69066667-97.09036999-97.09037113-97.09036998z m-97.09036999 242.72592554H220.72888889c-24.27259221 0-48.54518557-24.27259221-48.54518556-48.54518556s24.27259221-48.54518557 48.54518556-48.54518444h582.54222222c24.27259221 0 48.54518557 24.27259221 48.54518556 48.54518444s-24.27259221 48.54518557-48.54518556 48.54518556z" fill="currentColor"></path>
+</svg>
+    <span>CATEGORYS</span>
+  </div>
+  <div class="widget-body">
+    <ul class="categorys-list">
+      
+    </ul>
+  </div>
+</section>
+
+      <section class="widget-tags widget-item  layout-margin content-padding--primary soft-size--large soft-style--box">
+  <div class="widget-title">
+    <svg class="icon icon-tags" viewBox="0 0 1098 1024" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <path d="M283.42180005 272q0-28.38857157-20.09142843-48.48000001t-48.47999998-20.09142842-48.48000002 20.09142842-20.09142846 48.48000001 20.09142846 48.48 48.48000002 20.09142843 48.47999998-20.09142843 20.09142843-48.48zM855.0332285 580.57142843q0 28.38857157-19.81714313 48.2057147l-263.03999997 263.58857157q-20.9142853 19.81714313-48.75428534 19.81714312-28.38857157 0-48.20571468-19.81714312l-383.04-383.58857157q-20.36571468-19.81714313-34.55999999-54.10285688t-14.19428534-62.6742853l0-222.85714313q0-27.84000002 20.36571469-48.20571469t48.2057147-20.36571466l222.85714313 0q28.38857157 0 62.6742853 14.19428529t54.65142842 34.55999999l383.04000001 382.49142843q19.81714313 20.9142853 19.81714314 48.75428532zM1060.74751475 580.57142843q0 28.38857157-19.81714313 48.2057147l-263.04 263.58857157q-20.9142853 19.81714313-48.75428531 19.81714312-19.26857155 0-31.61142843-7.47428531t-28.38857159-24.13714314l251.79428534-251.7942853q19.81714313-19.81714313 19.81714308-48.20571469 0-27.84000002-19.81714308-48.75428531l-383.04000001-382.49142845q-20.36571468-20.36571468-54.65142842-34.55999999t-62.67428532-14.19428534l120 0q28.38857157 0 62.67428532 14.19428534t54.65142842 34.55999999l383.03999998 382.49142845q19.81714313 20.9142853 19.81714314 48.75428531z" fill="currentColor"></path>
+</svg>
+    <span>TAGS</span>
+  </div>
+  <div class="widget-body">
+    <div class="tags-cloud">
+      <a href="/tags/HPC/" style="font-size: 10px;" class="tags-cloud-0">HPC</a> <a href="/tags/Lesson/" style="font-size: 20px;" class="tags-cloud-10">Lesson</a> <a href="/tags/Life/" style="font-size: 10px;" class="tags-cloud-0">Life</a> <a href="/tags/nycu/" style="font-size: 20px;" class="tags-cloud-10">nycu</a> <a href="/tags/quant/" style="font-size: 10px;" class="tags-cloud-0">quant</a> <a href="/tags/skillmap/" style="font-size: 20px;" class="tags-cloud-10">skillmap</a>
+    </div>
+  </div>
+</section>
+    </div>
+  </article>
+</div>
+
+    <!-- footer container -->
+<footer id="footer" class="footer">
+  <div class="footer-container">
+    
+    <div class="social-icons">
+      
+        
+          <a href="https://www.instagram.com/johnson_725u/" class="soft-size--primary soft-style--box" target="_blank" rel="noopener noreferrer">
+            <svg class="icon icon-ins" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <path d="M512 0C372.906667 0 355.541333 0.64 300.928 3.072 246.4 5.632 209.28 14.208 176.64 26.88c-33.664 13.056-62.250667 30.592-90.709333 59.050667S39.893333 142.933333 26.88 176.64C14.208 209.28 5.589333 246.4 3.072 300.928 0.512 355.541333 0 372.906667 0 512s0.64 156.458667 3.072 211.072c2.56 54.485333 11.136 91.648 23.808 124.288a251.093333 251.093333 0 0 0 59.050667 90.709333A250.368 250.368 0 0 0 176.64 997.12c32.682667 12.629333 69.802667 21.290667 124.288 23.808C355.541333 1023.488 372.906667 1024 512 1024s156.458667-0.64 211.072-3.072c54.485333-2.56 91.648-11.178667 124.288-23.808a251.648 251.648 0 0 0 90.709333-59.050667 250.026667 250.026667 0 0 0 59.050667-90.709333c12.629333-32.64 21.290667-69.802667 23.808-124.288 2.56-54.613333 3.072-71.978667 3.072-211.072s-0.64-156.458667-3.072-211.072c-2.56-54.485333-11.178667-91.690667-23.808-124.288a251.306667 251.306667 0 0 0-59.050667-90.709333A249.472 249.472 0 0 0 847.36 26.88c-32.64-12.672-69.802667-21.290667-124.288-23.808C668.458667 0.512 651.093333 0 512 0z m0 92.16c136.661333 0 152.96 0.682667 206.933333 3.029333 49.92 2.346667 77.013333 10.624 95.018667 17.706667 23.978667 9.258667 40.96 20.352 58.965333 38.229333 17.877333 17.92 28.970667 34.944 38.229334 58.922667 6.997333 18.005333 15.36 45.098667 17.621333 95.018667 2.432 54.016 2.986667 70.229333 2.986667 206.933333s-0.64 152.96-3.157334 206.933333c-2.602667 49.92-10.922667 77.013333-17.962666 95.018667a162.56 162.56 0 0 1-38.357334 58.965333 159.744 159.744 0 0 1-58.88 38.229334c-17.92 6.997333-45.44 15.36-95.36 17.621333-54.357333 2.432-70.357333 2.986667-207.317333 2.986667-137.002667 0-153.002667-0.64-207.317333-3.157334-49.962667-2.602667-77.482667-10.922667-95.402667-17.962666a158.549333 158.549333 0 0 1-58.837333-38.357334 155.477333 155.477333 0 0 1-38.4-58.88c-7.04-17.92-15.317333-45.44-17.92-95.36-1.92-53.76-2.602667-70.357333-2.602667-206.677333 0-136.362667 0.682667-153.002667 2.602667-207.402667 2.602667-49.92 10.88-77.397333 17.92-95.317333 8.96-24.32 20.437333-40.96 38.4-58.922667 17.877333-17.877333 34.56-29.397333 58.837333-38.314666 17.92-7.082667 44.842667-15.402667 94.762667-17.962667 54.4-1.92 70.4-2.56 207.317333-2.56l1.92 1.28z m0 156.928a262.912 262.912 0 1 0 0 525.824 262.912 262.912 0 1 0 0-525.824zM512 682.666667c-94.293333 0-170.666667-76.373333-170.666667-170.666667s76.373333-170.666667 170.666667-170.666667 170.666667 76.373333 170.666667 170.666667-76.373333 170.666667-170.666667 170.666667z m334.762667-443.946667a61.482667 61.482667 0 0 1-122.88 0 61.44 61.44 0 0 1 122.88 0z"></path>
+</svg>
+
+          </a>
+        
+      
+        
+      
+        
+      
+        
+          <a href="https://github.com/chu-siang" class="soft-size--primary soft-style--box" target="_blank" rel="noopener noreferrer">
+            <svg class="icon icon-github" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <path d="M64.6 512c0 195.6 125.4 361.9 300.1 422.9 23.5 5.9 19.9-10.8 19.9-22.2v-77.6c-135.8 15.9-141.3-74-150.5-89-18.5-31.5-61.9-39.5-49-54.5 31-15.9 62.5 4 98.9 58 26.4 39.1 77.9 32.5 104.1 26 5.7-23.5 17.9-44.5 34.7-60.9-140.7-25.2-199.4-111.1-199.4-213.3 0-49.5 16.4-95.1 48.4-131.8-20.4-60.6 1.9-112.4 4.9-120.1 58.2-5.2 118.5 41.6 123.3 45.3 33.1-8.9 70.8-13.7 112.9-13.7 42.4 0 80.3 4.9 113.5 13.9 11.3-8.6 67.3-48.8 121.4-43.9 2.9 7.7 24.7 58.3 5.5 118.1 32.5 36.8 49 82.8 49 132.4 0 102.3-59 188.3-200.2 213.2 23.5 23.3 38.1 55.5 38.1 91.1v112.7c0.8 9 0 17.9 15.1 17.9C832.7 877 960.4 709.4 960.4 512.1c0-247.5-200.6-447.9-447.9-447.9C265 64.1 64.6 264.5 64.6 512z"></path>
+</svg>
+          </a>
+        
+      
+        
+      
+    </div>
+     
+    <p>&copy; 2024 <a href="/" target="_blank">Johnson Tseng</a></p>
+
+    
+
+    <p>Powered by <a href="https://hexo.io" target="_blank" rel="noopener noreferrer">Hexo</a> Theme - <a href="https://github.com/miiiku/flex-block" target="_blank" rel="noopener noreferrer author">flex-block</a></p>
+
+    <p>
+      <a href="javascript:;" id="theme-light">🌞 淺色</a>
+      <a href="javascript:;" id="theme-dark">🌛 深色</a>
+      <a href="javascript:;" id="theme-auto">🤖️ 自動</a>
+    </p>
+  </div>
+</footer>
+  </div>
+
+  <div class="back-to-top-fixed soft-size--round soft-style--box">
+    <svg class="icon icon-back-to-top" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg">
+      <path d="M725.333333 426.666667c-12.8 0-21.333333-4.266667-29.866667-12.8l-213.333333-213.333333c-17.066667-17.066667-17.066667-42.666667 0-59.733333s42.666667-17.066667 59.733333 0l213.333333 213.333333c17.066667 17.066667 17.066667 42.666667 0 59.733333C746.666667 422.4 738.133333 426.666667 725.333333 426.666667z"></path>
+      <path d="M298.666667 426.666667c-12.8 0-21.333333-4.266667-29.866667-12.8-17.066667-17.066667-17.066667-42.666667 0-59.733333l213.333333-213.333333c17.066667-17.066667 42.666667-17.066667 59.733333 0s17.066667 42.666667 0 59.733333l-213.333333 213.333333C320 422.4 311.466667 426.666667 298.666667 426.666667z"></path>
+      <path d="M512 896c-25.6 0-42.666667-17.066667-42.666667-42.666667L469.333333 170.666667c0-25.6 17.066667-42.666667 42.666667-42.666667s42.666667 17.066667 42.666667 42.666667l0 682.666667C554.666667 878.933333 537.6 896 512 896z"></path>
+    </svg>
+  </div>
+
+  
+  <!-- aplayer -->
+
+
+<!-- dplayer -->
+
+
+<!-- copy button  -->
+<script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js"></script>
+
+<!-- https://clipboardjs.com/ -->
+
+
+
+
+
+
+
+
+
+  
+
+
+  
+
+
+  
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+  
+  <!-- 尾部用户自定义相关内容 -->
+</body>
+</html>
